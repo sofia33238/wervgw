@@ -6,6 +6,7 @@ import { isSafeHttpUrl, switchAccountUrl, parseContext } from '../background/lin
 import { mountManual } from './views/manual.js';
 import { mountAppeals } from './views/appeals.js';
 import { mountS2S } from './views/s2s.js';
+import { mountPixel } from './views/pixel.js';
 import { mountJournal } from './views/journal.js';
 import { openSettings } from './views/settings.js';
 import { mountOverview } from './views/overview.js';
@@ -22,6 +23,7 @@ const TABS = [
   { id: 'links', title: 'Ссылки', icon: 'link', mount: mountLinks },
   { id: 'manual', title: 'Manual', icon: 'zap', mount: mountManual },
   { id: 'appeals', title: 'Апелляции', icon: 'send', mount: mountAppeals },
+  { id: 'pixel', title: 'Пиксель', icon: 'target', mount: mountPixel },
   { id: 's2s', title: 'S2S', icon: 'package', mount: mountS2S }
 ];
 const PAGES = [...TABS, { id: 'journal', title: 'Журнал', mount: mountJournal }];

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TTAds Hub",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "minimum_chrome_version": "111",
   "description": "Быстрые ссылки, мониторинг кабинетов, Manual-кампании, массовые апелляции, S2S-постбэки и пиксели для TikTok Ads Manager.",
   "permissions": [

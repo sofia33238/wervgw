@@ -5,7 +5,7 @@ import { PIXEL_EVENTS } from '../../background/lib/constants.js';
 import { buildPostbackUrl } from '../../background/s2s/events.js';
 import { buildZip } from '../../background/s2s/zip.js';
 
-const SESSION_KEY = 'tth:s2s:test';
+export const TEST_SESSION_KEY = 'tth:s2s:test';
 
 export function mountS2S(root, ctx) {
   const saved = ctx.settings?.s2s ?? { domain: '', path: '/lander/tts2s', event: 'Purchase', api: '1', value: '', currency: 'USD' };
@@ -74,10 +74,10 @@ export function mountS2S(root, ctx) {
   const tCode = h('input', { class: 'input mono', placeholder: 'TEST12345', autocomplete: 'off', spellcheck: 'false' });
   const result = h('div');
   const sendBtn = h('button', { class: 'btn primary sm', type: 'button' }, icon('play', 14), 'Отправить тест');
-  const storeTest = () => chrome.storage.session.set({ [SESSION_KEY]: { pixel: tPixel.value.trim(), token: tToken.value.trim(), ttclid: tTtclid.value.trim(), testCode: tCode.value.trim() } }).catch(() => {});
+  const storeTest = () => chrome.storage.session.set({ [TEST_SESSION_KEY]: { pixel: tPixel.value.trim(), token: tToken.value.trim(), ttclid: tTtclid.value.trim(), testCode: tCode.value.trim() } }).catch(() => {});
   for (const el of [tPixel, tToken, tTtclid, tCode]) el.addEventListener('input', debounce(storeTest, 400));
-  chrome.storage.session.get(SESSION_KEY).then((r) => {
-    const v = r[SESSION_KEY]; if (!v || stopped) return;
+  chrome.storage.session.get(TEST_SESSION_KEY).then((r) => {
+    const v = r[TEST_SESSION_KEY]; if (!v || stopped) return;
     tPixel.value = v.pixel || ''; tToken.value = v.token || ''; tTtclid.value = v.ttclid || ''; tCode.value = v.testCode || '';
   }).catch(() => {});
   sendBtn.addEventListener('click', async () => {
@@ -104,40 +104,12 @@ export function mountS2S(root, ctx) {
       h('div', { class: 'row wrap' }, sendBtn), h('span', { class: 'hint' }, 'Версия API — как в блоке «Постбэк» выше.'),
       result));
 
-  /* ---------- 4. Быстрый пиксель ---------- */
-  const pName = h('input', { class: 'input', placeholder: 'Pixel_<кабинет>_<время> (по умолчанию)' });
-  const pRule = h('input', { type: 'checkbox', checked: true });
-  const pWords = h('input', { class: 'input mono', value: 'thank-you, approved', spellcheck: 'false' });
-  const pEvent = h('input', { class: 'input', list: 'tth-events', value: 'Purchase' });
-  const pResult = h('div');
-  const pBtn = h('button', { class: 'btn sm', type: 'button' }, icon('zap', 14), 'Создать пиксель и получить токен');
-  pBtn.addEventListener('click', async () => {
-    pBtn.disabled = true; fill(pResult, h('div', { class: 'row' }, h('span', { class: 'spinner' }), 'Создаю пиксель в кабинете…'));
-    try {
-      const keywords = pWords.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 5);
-      const res = await bus.s2s.pixel(ctx.tabId, { name: pName.value.trim(), createRule: pRule.checked, keywords, ruleEvent: pEvent.value.trim() || 'Purchase' });
-      fill(pResult, 
-        h('div', { class: 'alert ok' }, icon('check', 15), h('div', null, h('b', null, 'Пиксель создан'), h('div', { class: 'small muted' }, `${res.pixelName}${res.ruleCreated ? ' · URL-правило добавлено' : ''}`))),
-        ...(res.warnings ?? []).map((w) => h('div', { class: 'alert warn', style: { marginTop: '8px' } }, icon('alert', 15), h('div', null, w))),
-        h('dl', { class: 'kv', style: { marginTop: '8px' } },
-          h('dt', null, 'Pixel Code'), h('dd', null, res.pixelCode, ' ', copyBtn(() => res.pixelCode)),
-          h('dt', null, 'Token'), h('dd', null, res.devToken ? `${res.devToken.slice(0, 6)}…${res.devToken.slice(-4)}` : 'не получен', ' ', res.devToken ? copyBtn(() => res.devToken) : null)),
-        h('button', { class: 'btn sm', type: 'button', style: { marginTop: '8px' }, onclick: () => { tPixel.value = res.pixelCode; tToken.value = res.devToken || ''; storeTest(); toast('Подставлено в «Тест события»', 'ok'); } }, 'Подставить в тест'));
-    } catch (e) { fill(pResult, h('div', { class: 'alert err' }, icon('alert', 15), h('div', null, e.message))); } finally { pBtn.disabled = !ctx.onAds; }
-  });
-  const pixel = h('section', { class: 'card' },
-    h('div', { class: 'card-head' }, h('div', { class: 'card-title' }, icon('target', 15), 'Быстрый пиксель'), h('span', { class: 'pill warn' }, 'из вкладки TikTok')),
-    h('div', { class: 'stack' },
-      field('Название (необязательно)', pName),
-      h('label', { class: 'check' }, pRule, h('span', null, 'Добавить URL-правило события по ключевым словам')),
-      h('div', { class: 'grid2' }, field('Слова в URL (до 5)', pWords), field('Событие правила', pEvent)),
-      h('div', { class: 'row wrap' }, pBtn), h('span', { class: 'hint' }, 'Нужна открытая вкладка кабинета: пиксель создаётся в нём от имени вашей сессии.'),
-      pResult));
-  const syncPixelState = () => { pBtn.disabled = !ctx.onAds; };
-  const stopTab = ctx.onTab(syncPixelState);
-  syncPixelState();
+  const moved = h('div', { class: 'alert info' }, icon('target', 15),
+    h('div', null, 'Создание пикселя и токена — на отдельной вкладке «Пиксель».',
+      h('div', { style: { marginTop: '6px' } }, h('button', { class: 'btn sm', type: 'button', onclick: () => ctx.show('pixel') }, icon('zap', 13), 'Открыть «Пиксель»'))));
 
   renderUrl();
-  root.append(h('div', { class: 'stack' }, datalist, postback, pkg, test, pixel));
-  return () => { stopped = true; stopTab(); };
+  root.append(h('div', { class: 'stack' }, datalist, moved, postback, pkg, test));
+  if (ctx.takeParams('s2s')?.focus === 'test') requestAnimationFrame(() => test.scrollIntoView({ block: 'start' }));
+  return () => { stopped = true; };
 }

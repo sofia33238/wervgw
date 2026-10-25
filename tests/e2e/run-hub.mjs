@@ -17,7 +17,7 @@ try {
   const adsTab = await tabIdOf(ads);
   let ui = await h.openUi(adsTab, { tab: 'links' });
   const tabs = await ui.locator('.tab .tab-label').allInnerTexts();
-  check('пять вкладок: Обзор, Ссылки, Manual, Апелляции, S2S', JSON.stringify(tabs) === JSON.stringify(['Обзор', 'Ссылки', 'Manual', 'Апелляции', 'S2S']), tabs.join(','));
+  check('шесть вкладок: Обзор, Ссылки, Manual, Апелляции, Пиксель, S2S', JSON.stringify(tabs) === JSON.stringify(['Обзор', 'Ссылки', 'Manual', 'Апелляции', 'Пиксель', 'S2S']), tabs.join(','));
   check('журнал вынесен в кнопку шапки', (await ui.locator('#btn-journal').count()) === 1);
   check('чип кабинета показывает хвост ID', (await ui.locator('#btn-account').innerText()).includes(ACCOUNT.slice(-6)));
 
@@ -82,6 +82,35 @@ try {
   check('пустой результат показывает подсказку', (await ui.locator('.empty h3', { hasText: 'Ничего не найдено' }).count()) === 1);
   await search.fill('');
   await poll(async () => (await ui.locator('.links-group').count()) === 7, { label: 'группы вернулись' });
+
+  section('Пиксель — вход из «Ссылок» и подсказка кабинета');
+  await search.fill('пиксель');
+  await poll(async () => (await ui.locator('.links-group').count()) === 0 && (await ui.locator('.link-row').count()) >= 1, { label: 'результаты поиска «пиксель»' });
+  check('поиск «пиксель»: первым — «Создать пиксель»', (await ui.locator('.link-row .link-title').first().innerText()).startsWith('Создать пиксель'));
+  const pagesBefore = context.pages().length;
+  await ui.locator('.link-row[data-id="pixel-create"] .link-main').click();
+  await poll(async () => (await ui.locator('.tab[data-tab="pixel"]').getAttribute('aria-selected')) === 'true', { label: 'вкладка «Пиксель»' });
+  await sleep(300);
+  check('«Создать пиксель» открывает вкладку «Пиксель», а не страницу TikTok', context.pages().length === pagesBefore);
+  const createBtn = ui.locator('.btn', { hasText: 'Создать пиксель и получить токен' });
+  const box = await createBtn.boundingBox();
+  check('кнопка создания видна без прокрутки', Boolean(box) && box.y + box.height <= ui.viewportSize().height, JSON.stringify(box));
+  check('кнопка активна, показан кабинет, где будет создан пиксель', (await createBtn.isEnabled()) && (await ui.locator('.alert.info').innerText()).includes(ACCOUNT));
+  await shot(ui, '25-pixel');
+
+  const bcPage = await newTikTokPage('/org/overview?bcid=1', 'https://business.tiktok.com');
+  const bcUi = await h.openUi(await tabIdOf(bcPage), { tab: 'pixel' });
+  await bcUi.locator('.alert.warn', { hasText: 'Откройте вкладку Ads Manager' }).waitFor();
+  check('на Business Center кнопка отключена и объяснено, что открыть', !(await bcUi.locator('.btn', { hasText: 'Создать пиксель и получить токен' }).isEnabled()));
+  await bcUi.close();
+  await bcPage.close();
+  const noAccountPage = await newTikTokPage('/i18n/dashboard');
+  const noAccountUi = await h.openUi(await tabIdOf(noAccountPage), { tab: 'pixel' });
+  await noAccountUi.locator('.alert.warn', { hasText: 'нет aadvid' }).waitFor();
+  check('без aadvid в адресе кнопка отключена и причина названа', !(await noAccountUi.locator('.btn', { hasText: 'Создать пиксель и получить токен' }).isEnabled()));
+  await noAccountUi.close();
+  await noAccountPage.close();
+  await ui.locator('.tab[data-tab="links"]').click();
 
   await ui.locator('.link-row[data-id="reports"] .star').click();
   await poll(async () => (await ui.locator('.link-tile').count()) === 7, { label: 'избранное: 7 плиток' });

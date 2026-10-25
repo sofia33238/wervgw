@@ -239,7 +239,7 @@ try {
   await sendMessage(ui, 'settings', 'patch', { patch: { appeals: { concurrency: 3 } } });
 
   /* ============ 5. S2S ============ */
-  section('S2S — постбэк, архив, тест события, пиксель');
+  section('S2S — постбэк, архив, тест события');
   await ui.locator('.tab[data-tab="s2s"]').click();
   await ui.getByPlaceholder('track.example.com').fill('https://Track.Example.com/');
   await poll(async () => (await ui.locator('.code').first().innerText()).includes('https://track.example.com/lander/tts2s/indexpix1.php?pix={px}&at={tk}'), { label: 'ссылка постбэка' });
@@ -262,19 +262,30 @@ try {
   await ui.locator('.btn', { hasText: 'Отправить тест' }).click();
   await poll(async () => (await ui.locator('.alert.err', { hasText: 'не принял' }).count()) === 1, { label: 'ошибка токена показана' });
   check('API 2.0 использует /event/track/ и показывает ошибку TikTok', mock.state.events.at(-1).path === '/open_api/v1.3/event/track/' && (await ui.locator('.alert.err').innerText()).includes('40105'));
-  await ui.locator('.btn', { hasText: 'Создать пиксель и получить токен' }).click();
+  check('на вкладке S2S есть переход на вкладку «Пиксель»', (await ui.getByRole('button', { name: 'Открыть «Пиксель»' }).count()) === 1);
+
+  section('Пиксель — создание, токен, передача в «Тест события»');
+  await ui.getByRole('button', { name: 'Открыть «Пиксель»' }).click();
+  await poll(async () => (await ui.locator('.tab[data-tab="pixel"]').getAttribute('aria-selected')) === 'true', { label: 'вкладка «Пиксель»' });
+  const createBtn = ui.locator('.btn', { hasText: 'Создать пиксель и получить токен' });
+  await createBtn.click();
   await poll(async () => (await ui.locator('.alert.ok', { hasText: 'Пиксель создан' }).count()) === 1, { label: 'пиксель создан' });
   check('пиксель создан, правило и токен получены', mock.state.pixels.length === 2 && (await ui.locator('.kv').innerText()).includes('CTESTPIXEL000000001') && (await ui.locator('.kv').innerText()).includes('DEVTOK'));
   check('URL-правило отправлено с ключевыми словами', JSON.stringify(mock.state.pixels[1].trigger).includes('thank-you') && JSON.stringify(mock.state.pixels[1].trigger).includes('approved'));
+  await shot(ui, '09-pixel');
+  await ui.locator('.btn', { hasText: 'В «Тест события»' }).click();
+  await poll(async () => (await ui.locator('.tab[data-tab="s2s"]').getAttribute('aria-selected')) === 'true', { label: 'возврат на вкладку S2S' });
+  await poll(async () => (await ui.getByPlaceholder('Pixel Code', { exact: true }).inputValue()) === 'CTESTPIXEL000000001', { label: 'пиксель подставлен в тест' });
+  check('пиксель и токен подставлены в «Тест события»', (await ui.getByPlaceholder('Access Token (Developer token)').inputValue()) === 'DEVTOKEN0123456789ABCDEFGHIJ');
+  const sendBox = () => ui.getByRole('button', { name: 'Отправить тест' }).boundingBox();
+  const testInView = await poll(async () => { const b = await sendBox(); return b && b.y + b.height <= ui.viewportSize().height; }, { label: 'тест события показан без ручной прокрутки' }).then(() => true, () => false);
+  check('после перехода вкладка S2S прокручена к «Тест события»', testInView);
+  await ui.locator('.tab[data-tab="pixel"]').click();
   mock.state.failToken = true;
-  await ui.locator('.btn', { hasText: 'Создать пиксель и получить токен' }).click();
+  await createBtn.click();
   await poll(async () => (await ui.locator('.alert.warn', { hasText: 'Developer token не получен' }).count()) === 1, { label: 'предупреждение о токене' });
   check('при сбое токена пиксель не теряется: код показан, предупреждение выведено', (await ui.locator('.alert.ok', { hasText: 'Пиксель создан' }).count()) === 1 && (await ui.locator('.kv').innerText()).includes('CTESTPIXEL000000001'));
   mock.state.failToken = false;
-  await shot(ui, '09-s2s');
-  await ui.evaluate(() => document.querySelector('#view').scrollTo(0, 0));
-  await sleep(300);
-  await shot(ui, '09b-s2s-top');
 
   /* ============ 6. Журнал и настройки ============ */
   section('Журнал и настройки');

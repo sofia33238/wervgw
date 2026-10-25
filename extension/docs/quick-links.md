@@ -55,7 +55,7 @@
 | Ссылка | Адрес | Достоверность | Подсказка |
 | --- | --- | --- | --- |
 | **Events Manager (пиксели)**<br>Пиксели, события и S2S Events API | `https://ads.tiktok.com/i18n/events_manager/home?aadvid={aadvid}` | ✅ наблюдался в живом Ads Manager |  |
-| **Создать пиксель**<br>Events Manager → подключение источника данных | `https://ads.tiktok.com/i18n/events_manager/home?aadvid={aadvid}` | ✅ наблюдался в живом Ads Manager | Быстрее: вкладка расширения S2S → «Быстрый пиксель» (создаёт пиксель и токен) |
+| **Создать пиксель**<br>Пиксель и Developer token за один клик — вкладка «Пиксель» | `https://ads.tiktok.com/i18n/events_manager/home?aadvid={aadvid}` | ✅ наблюдался в живом Ads Manager | открывает вкладку «Пиксель» расширения. Страницу Events Manager открывает ссылка «Events Manager (пиксели)» |
 | **Каталоги**<br>Catalog Manager: товарные каталоги | `https://ads.tiktok.com/catalogs/insights?aadvid={aadvid}` | ✅ наблюдался в живом Ads Manager |  |
 | **Библиотека креативов**<br>Creative Library: видео и изображения | `https://ads.tiktok.com/i18n/creative-library/dashboard?aadvid={aadvid}` | ✅ наблюдался в живом Ads Manager |  |
 | **Лиды**<br>Leads Center: заявки с форм | `https://ads.tiktok.com/lead_center/leads?aadvid={aadvid}` | ✅ наблюдался в живом Ads Manager |  |

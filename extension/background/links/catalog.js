@@ -21,6 +21,9 @@ export const GROUPS = Object.freeze([
 const acc = (path) => `${ADS}${path}?aadvid={aadvid}`;
 const BC_ORG = `${BC}/manage/overview?org_id={bcid}`;
 
+// Ссылки с полем app в панели открывают вкладку расширения (omnibox их пропускает); url остаётся для копирования ссылки.
+export const APP_TABS = Object.freeze({ pixel: 'Пиксель' });
+
 export const LINKS = Object.freeze([
   /* ---------- Аккаунты и Business Center ---------- */
   {
@@ -156,10 +159,10 @@ export const LINKS = Object.freeze([
     kw: ['пиксель', 'пиксели', 'события', 'events', 'events manager', 'pixel', 'api', 's2s', 'конверсии']
   },
   {
-    id: 'pixel-create', group: 'resources', icon: 'plus', title: 'Создать пиксель', conf: 'verified',
-    desc: 'Events Manager → подключение источника данных', url: acc('/i18n/events_manager/home'),
-    hint: 'Быстрее: вкладка расширения S2S → «Быстрый пиксель» (создаёт пиксель и токен)',
-    kw: ['создать пиксель', 'новый пиксель', 'pixel', 'токен', 'token']
+    id: 'pixel-create', group: 'resources', icon: 'plus', title: 'Создать пиксель', conf: 'verified', app: 'pixel',
+    desc: 'Пиксель и Developer token за один клик — вкладка «Пиксель»', url: acc('/i18n/events_manager/home'),
+    hint: 'Страницу Events Manager открывает ссылка «Events Manager (пиксели)»',
+    kw: ['создать пиксель', 'новый пиксель', 'быстрый пиксель', 'быстро создать пиксель', 'быстрое создание пикселя', 'pixel', 'токен', 'token']
   },
   {
     id: 'catalogs', group: 'resources', icon: 'package', title: 'Каталоги', conf: 'verified',
@@ -371,7 +374,8 @@ export function searchLinks(query, links, { favorites = [] } = {}) {
       if (!s) { ok = false; break; }
       score += s;
     }
-    if (ok) scored.push({ link, score: score + (fav.has(link.id) ? 0.5 : 0) - title.length / 1000 });
+    // Функции расширения (app) выше обычных страниц TikTok, даже если у страницы есть бонус избранного.
+    if (ok) scored.push({ link, score: score + (fav.has(link.id) ? 0.5 : 0) + (link.app ? 0.75 : 0) - title.length / 1000 });
   }
   return scored.sort((a, b) => b.score - a.score).map((x) => x.link);
 }
@@ -470,12 +474,16 @@ export function switchAccountUrl(currentUrl, accountId) {
 
 export const escapeXml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 
-export function omniboxSuggestions(query, links, { favorites = [], limit = 6 } = {}) {
+const pages = (links) => links.filter((l) => !l.app);
+
+export function omniboxSuggestions(query, source, { favorites = [], limit = 6 } = {}) {
+  const links = pages(source);
   const found = query.trim() ? searchLinks(query, links, { favorites }) : links.filter((l) => favorites.includes(l.id));
   return found.slice(0, limit).map((l) => ({ content: `link:${l.id}`, description: `<match>${escapeXml(l.title)}</match> <dim>— ${escapeXml(l.desc || '')}</dim>` }));
 }
 
-export function parseOmniboxInput(text, links, { favorites = [] } = {}) {
+export function parseOmniboxInput(text, source, { favorites = [] } = {}) {
+  const links = pages(source);
   const raw = String(text ?? '').trim();
   const direct = raw.startsWith('link:') ? links.find((l) => l.id === raw.slice(5)) : null;
   return direct ?? searchLinks(raw, links, { favorites })[0] ?? null;

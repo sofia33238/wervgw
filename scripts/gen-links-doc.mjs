@@ -2,7 +2,7 @@
 import { writeFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GROUPS, LINKS, DEFAULT_FAVORITES } from '../extension/background/links/catalog.js';
+import { GROUPS, LINKS, DEFAULT_FAVORITES, APP_TABS } from '../extension/background/links/catalog.js';
 
 const CONF = { verified: '✅ наблюдался в живом Ads Manager', official: '📘 адрес из официальных материалов TikTok', pattern: '≈ собран по структуре BC, не проверен' };
 
@@ -17,7 +17,7 @@ export function renderLinksDoc() {
   for (const group of GROUPS.filter((g) => g.id !== 'custom')) {
     const items = LINKS.filter((l) => l.group === group.id);
     lines.push(`## ${group.title}`, '', '| Ссылка | Адрес | Достоверность | Подсказка |', '| --- | --- | --- | --- |');
-    for (const l of items) lines.push(`| **${l.title}**<br>${l.desc} | \`${l.url}\`${l.fallback ? `<br>без BC: \`${l.fallback}\`` : ''} | ${CONF[l.conf]} | ${l.hint ?? ''} |`);
+    for (const l of items) lines.push(`| **${l.title}**<br>${l.desc} | \`${l.url}\`${l.fallback ? `<br>без BC: \`${l.fallback}\`` : ''} | ${CONF[l.conf]} | ${[l.app ? `открывает вкладку «${APP_TABS[l.app]}» расширения` : '', l.hint ?? ''].filter(Boolean).join('. ')} |`);
     lines.push('');
   }
   lines.push('## Omnibox и клавиши', '', '- В адресной строке введите `tt`, пробел и запрос: `tt биллинг`, `tt создать bc`, `tt пиксель`. Enter открывает лучший результат, стрелки выбирают другой.',

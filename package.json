@@ -1,6 +1,6 @@
 {
   "name": "ttads-hub",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "TTAds Hub — расширение Chrome для TikTok Ads Manager (быстрые ссылки, мониторинг кабинетов, Manual-кампании, массовые апелляции, S2S и пиксели)",
   "type": "module",

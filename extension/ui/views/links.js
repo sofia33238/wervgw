@@ -35,6 +35,12 @@ export function mountLinks(root, ctx) {
 
   /* ---------- открытие ссылки ---------- */
   async function open(link, event) {
+    if (link.app) {
+      const recents = [link.id, ...prefs().recents.filter((x) => x !== link.id)].slice(0, 8);
+      ctx.saveSettings({ links: { ...prefs(), recents } }).catch(() => {});
+      ctx.show(link.app);
+      return;
+    }
     const resolved = resolveLink(link, effective(), prefs().overrides);
     if (!resolved.ok) { toast('Не удалось собрать адрес: не хватает данных кабинета или BC', 'error'); return; }
     const invert = Boolean(event && (event.ctrlKey || event.metaKey || event.shiftKey || event.button === 1));

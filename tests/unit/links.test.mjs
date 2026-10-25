@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  LINKS, GROUPS, LINK_BY_ID, DEFAULT_FAVORITES, isSafeHttpUrl, resolveUrl, resolveLink, parseContext, searchLinks, normalizeText,
+  LINKS, GROUPS, APP_TABS, LINK_BY_ID, DEFAULT_FAVORITES, isSafeHttpUrl, resolveUrl, resolveLink, parseContext, searchLinks, normalizeText,
   normalizeLinksSettings, allLinks, fromCurrentUrl, switchAccountUrl, omniboxSuggestions, parseOmniboxInput, escapeXml, newCustomId, hostOf, isTikTokUrl
 } from '../../extension/background/links/catalog.js';
 
@@ -24,9 +24,24 @@ test('catalog integrity: unique ids, known groups, safe https urls on allowed ho
     if (link.url.includes('{bcid}')) assert.ok(link.fallback, `${link.id}: ссылке с BC нужен fallback`);
     assert.ok(Array.isArray(link.kw) && link.kw.length, `${link.id}: нет ключевых слов`);
     assert.ok((link.hint ?? '').length <= 200);
+    if (link.app) assert.ok(APP_TABS[link.app], `${link.id}: неизвестная вкладка ${link.app}`);
   }
   for (const id of ['bc-create', 'adaccount-create', 'billing', 'campaigns', 'events', 'account-settings', ...DEFAULT_FAVORITES]) assert.ok(LINK_BY_ID.has(id), `нет обязательной ссылки ${id}`);
   assert.ok(LINKS.length >= 40);
+});
+
+test('«Создать пиксель» ведёт на вкладку «Пиксель», а адрес Events Manager остаётся для omnibox', () => {
+  const link = LINK_BY_ID.get('pixel-create');
+  assert.equal(link.app, 'pixel');
+  assert.equal(APP_TABS.pixel, 'Пиксель');
+  assert.equal(resolveLink(link, { aadvid: '1234567' }).url, 'https://ads.tiktok.com/i18n/events_manager/home?aadvid=1234567');
+  assert.deepEqual(LINKS.filter((l) => l.app).map((l) => l.id), ['pixel-create'], 'остальные ссылки открывают страницы TikTok');
+  assert.ok(!omniboxSuggestions('пиксель', LINKS, { favorites: DEFAULT_FAVORITES }).some((s) => s.content === 'link:pixel-create'), 'omnibox не предлагает вкладку расширения');
+  assert.equal(parseOmniboxInput('пиксель', LINKS, { favorites: DEFAULT_FAVORITES })?.id, 'events', 'tt пиксель открывает Events Manager');
+  assert.equal(parseOmniboxInput('link:pixel-create', LINKS), null);
+  for (const q of ['пиксель', 'создать пиксель', 'быстро пиксель', 'быстрый пиксель', 'быстрое создание пикселя', 'токен']) {
+    assert.equal(searchLinks(q, LINKS, { favorites: DEFAULT_FAVORITES })[0]?.id, 'pixel-create', `«${q}» с избранным по умолчанию`);
+  }
 });
 
 test('verified account routes match the live Ads Manager routes from the research docs', () => {

@@ -22,6 +22,14 @@ try {
   await shot(ui, 'links');
 
   await ui.close();
+  ui = await h.openUi(tabId, { tab: 'pixel', height: 700 });
+  await ui.addStyleTag({ content: '#toasts{display:none!important}' });
+  await ui.locator('.alert.info').waitFor();
+  await ui.locator('.btn', { hasText: 'Создать пиксель и получить токен' }).click();
+  await ui.locator('.alert.ok', { hasText: 'Пиксель создан' }).waitFor();
+  await shot(ui, 'pixel');
+
+  await ui.close();
   ui = await h.openUi(tabId, { tab: 'overview', height: 760 });
   await ui.addStyleTag({ content: '#toasts{display:none!important}' });
   await poll(async () => (await ui.locator('.account-card').count()) === 4, { label: 'карточки', timeout: 40000 });
