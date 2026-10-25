@@ -1,77 +1,14 @@
-// e2e-проверка расширения в настоящем Chrome на моке TikTok Ads Manager.
+// e2e-проверка расширения в настоящем Chrome на моке TikTok Ads Manager (ядро: Manual, MNL, апелляции, S2S, журнал, настройки).
 // Запуск: npm run test:e2e   (нужны Chrome/Chromium и openssl; путь к браузеру — CHROME_PATH)
-import { chromium } from 'playwright-core';
-import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { startMock, ACCOUNT } from './mock-tiktok.mjs';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ACCOUNT } from './mock-tiktok.mjs';
+import { check, section, sleep, poll, createHarness, extensionPath, outDir, HOST } from './harness.mjs';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const extensionPath = process.env.EXTENSION_PATH ? resolve(process.env.EXTENSION_PATH) : resolve(root, 'extension');
-const outDir = resolve(root, 'tests/e2e/out');
-mkdirSync(outDir, { recursive: true });
-const PORT = 8443;
-const HOST = `https://ads.tiktok.com`;
-
-const results = [];
-const check = (name, ok, detail = '') => {
-  results.push({ name, ok: Boolean(ok), detail });
-  console.log(`${ok ? '  ✔' : '  ✖'} ${name}${!ok && detail ? ` — ${detail}` : ''}`);
-};
-const section = (title) => console.log(`\n▶ ${title}`);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function poll(fn, { timeout = 30000, interval = 250, label = 'условие' } = {}) {
-  const deadline = Date.now() + timeout;
-  let last;
-  while (Date.now() < deadline) {
-    try { last = await fn(); if (last) return last; } catch (e) { last = e; }
-    await sleep(interval);
-  }
-  throw new Error(`Таймаут: ${label}${last instanceof Error ? ` (${last.message})` : ''}`);
-}
-
-const mock = await startMock({ port: PORT });
-const profile = mkdtempSync(join(tmpdir(), 'tth-profile-'));
-const context = await chromium.launchPersistentContext(profile, {
-  headless: false,
-  executablePath: process.env.CHROME_PATH || '/usr/local/bin/google-chrome',
-  args: [
-    '--headless=new', '--no-sandbox', `--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`,
-    `--host-resolver-rules=MAP ads.tiktok.com 127.0.0.1:${PORT}, MAP business-api.tiktok.com 127.0.0.1:${PORT}`, '--ignore-certificate-errors'
-  ]
-});
-context.on('weberror', (e) => console.log('   [page error]', e.error().message));
-
-let sw = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker', { timeout: 20000 });
-const extId = new URL(sw.url()).host;
-const swErrors = [];
-const uiErrors = [];
-
-const tabIdOf = (page) => sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url)?.id, page.url());
-async function openUi(tabId, { width = 440, height = 640 } = {}) {
-  const ui = await context.newPage();
-  ui.on('pageerror', (e) => uiErrors.push(e.message));
-  ui.on('console', (m) => { if (m.type() === 'error') uiErrors.push(m.text()); });
-  await ui.setViewportSize({ width, height });
-  await ui.goto(`chrome-extension://${extId}/ui/app.html?tab=${tabId}`);
-  await ui.locator('.tab').first().waitFor();
-  return ui;
-}
-const shot = async (page, name) => { await page.screenshot({ path: join(outDir, `${name}.png`) }); };
-const heroTitle = (ui) => ui.locator('.hero-title').innerText();
-const journal = () => sw.evaluate(async () => (await chrome.storage.local.get('journal')).journal ?? []);
-const sendMessage = (ui, ns, type, extra = {}) => ui.evaluate(([n, t, e]) => chrome.runtime.sendMessage({ ns: n, type: t, ...e }), [ns, type, extra]);
-
-async function newTikTokPage(path) {
-  const page = await context.newPage();
-  page.on('pageerror', (e) => console.log('   [tiktok page error]', e.message));
-  await page.goto(`${HOST}${path}`);
-  return page;
-}
-const draftUrl = async (page, goal) => page.evaluate(async ([g, account]) => (await (await fetch(`/mock/new-draft?aadvid=${account}&goal=${g}`, { method: 'POST' })).json()).url, [goal, ACCOUNT]);
-const extensionSaves = () => mock.state.saves.filter((s) => s.fromExtension);
+const h = await createHarness();
+const { mock, context, sw, swErrors, uiErrors, tabIdOf, shot, journal, sendMessage, heroTitle, newTikTokPage, draftUrl, extensionSaves } = h;
+const openUi = (tabId, options = {}) => h.openUi(tabId, { tab: 'manual', ...options });
 
 try {
   /* ============ 0. Запуск ============ */
@@ -263,12 +200,12 @@ try {
   await ui.close();
   await poll(async () => (await batchState())?.state === 'done', { timeout: 30000, label: 'пачка завершилась без открытого окна' });
   check('пачка дошла до конца в фоне после закрытия окна', mock.state.appeals.length === appealsBefore + 1);
-  ui = await openUi(creativesTab); // последняя открытая вкладка запоминается — окно открывается сразу на «Апелляциях»
+  ui = await openUi(creativesTab, { tab: null }); // последняя открытая вкладка запоминается — окно открывается сразу на «Апелляциях»
   await poll(async () => (await ui.locator('.sheet-head h2', { hasText: 'Итоги отправки' }).count()) === 1, { label: 'итоги показаны при повторном открытии' });
   check('итоги отправки восстановлены при следующем открытии', (await ui.locator('.stat', { hasText: 'Ошибок' }).locator('b').innerText()) === '1');
   await ui.locator('.sheet-foot .btn', { hasText: 'Закрыть' }).click();
   await ui.close();
-  ui = await openUi(creativesTab);
+  ui = await openUi(creativesTab, { tab: null });
   await poll(async () => (await ui.locator('.item').count()) >= 1, { label: 'список апелляций открыт' });
   await sleep(1500);
   check('просмотренные итоги больше не всплывают', (await ui.locator('.sheet').count()) === 0);
@@ -280,7 +217,7 @@ try {
   await sendMessage(ui, 'settings', 'patch', { patch: { appeals: { concurrency: 1 } } });
   await ui.close();
   await creatives.reload();
-  ui = await openUi(creativesTab);
+  ui = await openUi(creativesTab, { tab: null });
   await poll(async () => (await ui.locator('.item').count()) >= 7, { label: 'в списке появились 6 новых объявлений' });
   await ui.getByPlaceholder('Фильтр по названию или ID').fill('Bulk');
   await ui.locator('.bar .btn', { hasText: 'Выбрать все' }).click();
@@ -341,7 +278,7 @@ try {
 
   /* ============ 6. Журнал и настройки ============ */
   section('Журнал и настройки');
-  await ui.locator('.tab[data-tab="journal"]').click();
+  await ui.locator('#btn-journal').click();
   await poll(async () => (await ui.locator('.log-item').count()) >= 4, { label: 'записи журнала' });
   const sources = await ui.locator('.log-item .pill').allInnerTexts();
   check('в журнале есть Manual, MNL, Апелляции и S2S', ['Manual', 'MNL', 'Апелляции', 'S2S'].every((s) => sources.includes(s)), sources.join(','));
@@ -369,10 +306,5 @@ try {
 } catch (error) {
   check('сценарий завершился без исключений', false, error.stack || String(error));
 } finally {
-  await context.close().catch(() => {});
-  await mock.stop().catch(() => {});
+  await h.finish();
 }
-
-const failed = results.filter((r) => !r.ok);
-console.log(`\nИтого: ${results.length - failed.length}/${results.length} проверок пройдено`);
-if (failed.length) { console.log('Провалены:\n' + failed.map((f) => ` - ${f.name}: ${f.detail}`).join('\n')); process.exit(1); }

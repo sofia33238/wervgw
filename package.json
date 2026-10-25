@@ -1,14 +1,15 @@
 {
   "name": "ttads-hub",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
-  "description": "TTAds Hub — расширение Chrome для TikTok Ads Manager (Manual-кампании, массовые апелляции, S2S и пиксели)",
+  "description": "TTAds Hub — расширение Chrome для TikTok Ads Manager (быстрые ссылки, мониторинг кабинетов, Manual-кампании, массовые апелляции, S2S и пиксели)",
   "type": "module",
   "scripts": {
     "test": "node --test \"tests/unit/*.test.mjs\"",
-    "test:e2e": "node tests/e2e/run.mjs",
+    "test:e2e": "node tests/e2e/run.mjs && node tests/e2e/run-hub.mjs",
+    "docs:links": "node scripts/gen-links-doc.mjs",
     "icons": "node scripts/make-icons.mjs",
-    "build": "node scripts/build-zip.mjs"
+    "build": "node scripts/gen-links-doc.mjs && node scripts/build-zip.mjs"
   },
   "devDependencies": {
     "playwright-core": "^1.50.0"
