@@ -52,6 +52,9 @@ export async function copyText(text) {
 export function toast(message, kind = 'info', ms = 3600) {
   const host = $('#toasts');
   if (!host) return;
+  // Не копим уведомления стопкой: одинаковое заменяется, одновременно видно не больше трёх.
+  for (const old of [...host.children]) if (old.textContent === message) old.remove();
+  while (host.children.length >= 3) host.firstElementChild.remove();
   const el = h('div', { class: `toast ${kind}`, role: 'status' }, message);
   host.append(el);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 250); }, ms);

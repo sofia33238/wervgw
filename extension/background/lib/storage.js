@@ -1,6 +1,7 @@
 import {
-  DEFAULT_AUTOMATION_FIELDS, DEFAULT_LABELS, DEFAULT_APPEAL_TEXT
+  DEFAULT_AUTOMATION_FIELDS, DEFAULT_LABELS, DEFAULT_APPEAL_TEXT, PERIODS, MONITOR_INTERVALS, META_COLORS
 } from './constants.js';
+import { normalizeLinksSettings, DEFAULT_LINKS_SETTINGS } from '../links/catalog.js';
 
 const SETTINGS_KEY = 'settings';
 const JOURNAL_KEY = 'journal';
@@ -15,6 +16,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
     templates: [{ id: 'default', name: 'Стандартный', text: DEFAULT_APPEAL_TEXT }]
   },
   s2s: { domain: '', path: '/lander/tts2s', event: 'Purchase', api: '1', value: '', currency: 'USD' },
+  links: DEFAULT_LINKS_SETTINGS,
+  monitor: { enabled: false, intervalMin: 15, notify: false },
+  overview: { period: '7d', sort: 'problems', filter: 'all' },
+  accounts: { meta: {} },
   ui: { theme: 'dark' }
 });
 
@@ -28,10 +33,29 @@ const strList = (v, fallback, max = 200) => {
   return list.length ? list : [...fallback];
 };
 
+const nearest = (value, allowed, fallback) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return allowed.reduce((best, x) => (Math.abs(x - n) < Math.abs(best - n) ? x : best), allowed[0]);
+};
+
+// Метки кабинетов: { [id]: { label, color, note, pinned } } — только непустые записи, не более 500.
+export function normalizeAccountMeta(raw) {
+  const out = {};
+  for (const [id, v] of Object.entries(raw && typeof raw === 'object' ? raw : {})) {
+    if (!/^\d{5,30}$/.test(id) || !v || typeof v !== 'object') continue;
+    const label = String(v.label ?? '').trim().slice(0, 24), note = String(v.note ?? '').trim().slice(0, 300), pinned = v.pinned === true;
+    if (!label && !note && !pinned) continue;
+    out[id] = { label, color: META_COLORS.includes(v.color) ? v.color : 'gray', note, pinned };
+    if (Object.keys(out).length >= 500) break;
+  }
+  return out;
+}
+
 // Приводит сохранённые данные к безопасной форме: неизвестные ключи отбрасываются, значения ограничиваются.
 export function normalizeSettings(raw = {}) {
   const d = DEFAULT_SETTINGS;
-  const m = raw.manual ?? {}, a = raw.appeals ?? {}, s = raw.s2s ?? {}, u = raw.ui ?? {};
+  const m = raw.manual ?? {}, a = raw.appeals ?? {}, s = raw.s2s ?? {}, u = raw.ui ?? {}, mon = raw.monitor ?? {}, ov = raw.overview ?? {};
   const templates = (Array.isArray(a.templates) ? a.templates : [])
     .filter((t) => t && typeof t.id === 'string' && typeof t.text === 'string' && t.text.trim())
     .slice(0, 30)
@@ -58,6 +82,18 @@ export function normalizeSettings(raw = {}) {
       value: String(s.value ?? '').slice(0, 60),
       currency: /^[A-Za-z]{3}$/.test(s.currency ?? '') ? String(s.currency).toUpperCase() : d.s2s.currency
     },
+    links: normalizeLinksSettings(raw.links),
+    monitor: {
+      enabled: mon.enabled === true,
+      intervalMin: nearest(mon.intervalMin, MONITOR_INTERVALS, d.monitor.intervalMin),
+      notify: mon.notify === true
+    },
+    overview: {
+      period: PERIODS.some((p) => p.id === ov.period) ? ov.period : d.overview.period,
+      sort: ['problems', 'spend', 'name'].includes(ov.sort) ? ov.sort : d.overview.sort,
+      filter: ['all', 'issues', 'working', 'off'].includes(ov.filter) ? ov.filter : d.overview.filter
+    },
+    accounts: { meta: normalizeAccountMeta(raw.accounts?.meta) },
     ui: { theme: ['auto', 'dark', 'light'].includes(u.theme) ? u.theme : d.ui.theme }
   };
 }

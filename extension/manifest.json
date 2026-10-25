@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
   "name": "TTAds Hub",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "minimum_chrome_version": "111",
-  "description": "Всё для TikTok Ads Manager в одном расширении: Manual-кампании, массовые апелляции, S2S-постбэки и пиксели.",
-  "permissions": ["storage", "tabs", "scripting", "webRequest"],
+  "description": "Быстрые ссылки, мониторинг кабинетов, Manual-кампании, массовые апелляции, S2S-постбэки и пиксели для TikTok Ads Manager.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "webRequest",
+    "alarms"
+  ],
   "host_permissions": [
     "https://ads.tiktok.com/*",
     "https://business-api.tiktok.com/*"
@@ -31,15 +37,38 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://ads.tiktok.com/*"],
-      "js": ["content/interceptor.js"],
+      "matches": [
+        "https://ads.tiktok.com/*"
+      ],
+      "js": [
+        "content/interceptor.js"
+      ],
       "world": "MAIN",
       "run_at": "document_start"
     },
     {
-      "matches": ["https://ads.tiktok.com/*"],
-      "js": ["content/agent.js"],
+      "matches": [
+        "https://ads.tiktok.com/*"
+      ],
+      "js": [
+        "content/agent.js"
+      ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "optional_permissions": [
+    "notifications"
+  ],
+  "omnibox": {
+    "keyword": "tt"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+K",
+        "mac": "Alt+Shift+K"
+      },
+      "description": "Открыть TTAds Hub"
+    }
+  }
 }
