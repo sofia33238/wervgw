@@ -8,6 +8,37 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 export const ACCOUNT = '7412345678901234567';
+export const ACCOUNT_2 = '7412345678901234568';
+export const ACCOUNT_3 = '7412345678901234569';
+export const ACCOUNT_BAD = '7412345678901234570';
+export const BC_1 = '7700000000000000001';
+export const BC_2 = '7700000000000000002';
+export const BC_EMPTY = '7700000000000000003';
+
+// Кабинеты: BC One (Main, Second), BC Two (Broken — отдаёт ошибку доступа), личный кабинет без BC, пустой BC.
+const SWITCH_LIST = [
+  { id: BC_1, name: 'BC One', role: 1, child: [
+    { id: ACCOUNT, name: 'Main Account', country: 'ES', currency: 'EUR', status: 1 },
+    { id: ACCOUNT_2, name: 'Second Account', country: 'DE', currency: 'EUR', status: 1 }] },
+  { id: BC_2, name: 'BC Two', role: 1, child: [{ id: ACCOUNT_BAD, name: 'Broken Account', country: 'FR', currency: 'EUR', status: 1 }] },
+  { id: ACCOUNT_3, name: 'Personal Account', country: 'US', currency: 'USD', status: 1, role: 1 },
+  { id: BC_EMPTY, name: 'Empty BC', role: 99, child: [] }
+];
+const CAMPAIGNS = {
+  [ACCOUNT]: [
+    { id: '8000000000001', name: 'Campaign A — working', opt: 1, primary: 'delivery_ok', cost: 12.5, show: 10000, click: 500, conv: 25, budget: 35 },
+    { id: '8000000000002', name: 'Campaign B — no balance', opt: 1, primary: 'not_delivery', status: 'account_balance_not_enough', cost: 3, show: 1000, click: 30, conv: 1, budget: 50 },
+    { id: '8000000000003', name: 'Campaign C — paused', opt: 2, primary: 'disable', cost: 0.5, show: 100, click: 2, conv: 0, budget: 20 }
+  ],
+  [ACCOUNT_2]: [{ id: '8000000000011', name: 'Second account campaign', opt: 1, primary: 'delivery_ok', cost: 4, show: 2000, click: 80, conv: 4, budget: 10 }],
+  [ACCOUNT_3]: []
+};
+const ADGROUPS = {
+  [ACCOUNT]: [
+    { id: '7000000000001', name: 'Adgroup One', campaign_id: '8000000000001', campaign_name: 'Campaign A — working', opt: 1, primary: 'delivery_ok', cost: 8, show: 6000, click: 300, conv: 20 },
+    { id: '7000000000002', name: 'Adgroup Two', campaign_id: '8000000000002', campaign_name: 'Campaign B — no balance', opt: 1, primary: 'not_delivery', status: 'adgroup_out_of_budget', cost: 3, show: 1000, click: 30, conv: 1 }
+  ]
+};
 const CSRF = 'csrf-test-token-123';
 const GOALS = { LEAD_GENERATION: { objective_type: 8 }, SALES: { objective_type: 3, sales_destination: 3 }, APP_PROMOTION: { objective_type: 16 } };
 
@@ -15,7 +46,7 @@ function makeCert() {
   const dir = mkdtempSync(join(tmpdir(), 'tth-cert-'));
   const key = join(dir, 'key.pem'), cert = join(dir, 'cert.pem');
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-days', '2', '-subj', '/CN=ads.tiktok.com',
-    '-addext', 'subjectAltName=DNS:ads.tiktok.com,DNS:business-api.tiktok.com'], { stdio: 'ignore' });
+    '-addext', 'subjectAltName=DNS:ads.tiktok.com,DNS:business-api.tiktok.com,DNS:business.tiktok.com,DNS:library.tiktok.com,DNS:track.example.com'], { stdio: 'ignore' });
   return { key: fs.readFileSync(key), cert: fs.readFileSync(cert) };
 }
 
@@ -98,7 +129,8 @@ export async function startMock({ port = 8443 } = {}) {
       { creative_id: '9000000000004', ad_id: '7000000000001', campaign_id: '8000000000001', name: 'Ad D — server error', pageStatus: 'Not delivered · Disapproved', appealMode: 'error' },
       { creative_id: '9000000000005', ad_id: '7000000000002', campaign_id: '8000000000001', name: 'Ad E — healthy', pageStatus: 'Active', appealMode: 'ok', healthy: true }
     ],
-    appealResults: new Map(), inflight: 0, peakInflight: 0, failToken: false
+    appealResults: new Map(), inflight: 0, peakInflight: 0, failToken: false,
+    visited: [], lists: [], switchListCalls: 0, campaignStatusOverride: new Map()
   };
   const json = (res, body, status = 200) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
   const readBody = (req) => new Promise((resolve) => { let data = ''; req.on('data', (c) => { data += c; }); req.on('end', () => resolve(data)); });
@@ -109,6 +141,10 @@ export async function startMock({ port = 8443 } = {}) {
     const host = (req.headers.host || '').split(':')[0];
     const raw = req.method === 'POST' ? await readBody(req) : '';
     const body = (() => { try { return JSON.parse(raw); } catch { return null; } })();
+
+    if (req.method === 'GET' && host !== 'business-api.tiktok.com' && url.pathname !== '/favicon.ico' && !url.pathname.startsWith('/api/')) {
+      state.visited.push({ host, path: url.pathname, query: Object.fromEntries(url.searchParams), href: `https://${host}${url.pathname}${url.search}` });
+    }
 
     if (host === 'business-api.tiktok.com') {
       const record = { path: url.pathname, token: req.headers['access-token'], body };
@@ -129,7 +165,13 @@ export async function startMock({ port = 8443 } = {}) {
         return draft ? html(draftPage(draft)) : (res.writeHead(404), res.end('no draft'));
       }
       if (url.pathname === '/favicon.ico') { res.writeHead(204); return res.end(); }
-      res.writeHead(404); return res.end('not found');
+      if (url.pathname === '/api/v2/i18n/account/account_switch_list/') {
+        state.switchListCalls++;
+        return json(res, { code: 0, msg: 'success', data: { data: SWITCH_LIST } });
+      }
+      if (url.pathname.startsWith('/api/')) { res.writeHead(404); return res.end('not found'); }
+      // любые прочие страницы TikTok (биллинг, события, BC…) — заглушка: важно, что ссылка открыла нужный адрес
+      return html(page(`Stub · ${host}${url.pathname}`, `<h3>Stub page</h3><p id="where">${host}${url.pathname}</p>`));
     }
 
     // ---- API ----
@@ -166,16 +208,41 @@ export async function startMock({ port = 8443 } = {}) {
       if (ad.appealMode === 'accepted') { state.appealResults.set(ad.creative_id, { status: 2, update_time: Math.floor(Date.now() / 1000) + 1 }); return json(res, { code: 0, msg: 'success', data: {} }); }
       return json(res, { code: 50001, msg: 'internal error' });
     }
-    if (url.pathname === '/api/v4/i18n/statistics/op/ad/list/') {
-      const filter = body?.common_req?.filters?.[0] || {};
-      const wanted = filter.in_field_values || [];
-      const pick = (a) => (filter.field === 'campaign_ids' ? wanted.includes(a.campaign_id) : filter.field === 'ad_ids' ? wanted.includes(a.ad_id) : wanted.includes(a.creative_id));
-      const table = state.ads.filter(pick).map((a) => ({
-        creative_id: a.creative_id, ad_id: a.ad_id, campaign_id: a.campaign_id, creative_name: a.name, ad_name: 'Adgroup 1', campaign_name: 'Campaign 1',
-        creative_status: a.healthy ? 'creative_delivery_ok' : 'creative_offline_audit',
-        row_data: state.appealResults.has(a.creative_id) ? { appeal_result: JSON.stringify(state.appealResults.get(a.creative_id)) } : {}
-      }));
-      return json(res, { code: 0, data: { table, pagination: { page_count: 1 } } });
+    if (/^\/api\/v4\/i18n\/statistics\/op\/(campaign|adgroup|ad)\/list\/$/.test(url.pathname)) {
+      const level = url.pathname.split('/')[6];
+      const account = url.searchParams.get('aadvid');
+      const common = body?.common_req ?? {};
+      state.lists.push({ level, account, st: common.st, et: common.et, page: common.page, page_size: common.page_size, filters: common.filters, dimensions: common.dimensions, metrics: common.metrics });
+      if (account === ACCOUNT_BAD) return json(res, { code: 40001, msg: 'No permission to access this advertiser' });
+      const days = Math.max(1, Math.round((Date.parse(common.et) - Date.parse(common.st)) / 86400000) + 1) || 1;
+      const stat = (o) => ({ stat_cost: (o.cost * days).toFixed(2), show_cnt: String(o.show * days), click_cnt: o.click * days, time_attr_convert_cnt: String(o.conv * days) });
+      let table = [];
+      if (level === 'campaign') {
+        table = (CAMPAIGNS[account] ?? []).map((c) => ({
+          row_data: { campaign_id: c.id, campaign_name: c.name, opt_status: state.campaignStatusOverride.get(c.id)?.opt ?? c.opt, primary_status: state.campaignStatusOverride.get(c.id)?.primary ?? c.primary, campaign_status: c.status ?? '-', campaign_budget: c.budget },
+          stat_data: stat(c)
+        }));
+      } else if (level === 'adgroup') {
+        table = (ADGROUPS[account] ?? []).map((g) => ({
+          row_data: { ad_id: g.id, ad_name: g.name, campaign_id: g.campaign_id, campaign_name: g.campaign_name, opt_status: g.opt, primary_status: g.primary, ad_status: g.status ?? '-' },
+          stat_data: stat(g)
+        }));
+      } else {
+        const filter = common.filters?.[0];
+        const wanted = filter?.in_field_values || [];
+        const pick = !filter ? () => account === ACCOUNT
+          : (a) => (filter.field === 'campaign_ids' ? wanted.includes(a.campaign_id) : filter.field === 'ad_ids' ? wanted.includes(a.ad_id) : wanted.includes(a.creative_id));
+        table = state.ads.filter(pick).map((a) => ({
+          creative_id: a.creative_id, ad_id: a.ad_id, campaign_id: a.campaign_id, creative_name: a.name, ad_name: 'Adgroup 1', campaign_name: 'Campaign 1',
+          creative_status: a.healthy ? 'creative_delivery_ok' : 'creative_offline_audit',
+          opt_status: 1, primary_status: a.healthy ? 'delivery_ok' : 'not_delivery',
+          stat_data: stat({ cost: a.healthy ? 2 : 0.5, show: 100, click: 5, conv: a.healthy ? 1 : 0 }),
+          row_data: state.appealResults.has(a.creative_id) ? { appeal_result: JSON.stringify(state.appealResults.get(a.creative_id)) } : {}
+        }));
+      }
+      const pageSize = common.page_size || 200, pageNo = common.page || 1;
+      const slice = table.slice((pageNo - 1) * pageSize, pageNo * pageSize);
+      return json(res, { code: 0, data: { table: slice, pagination: { total_count: table.length, page_count: Math.max(1, Math.ceil(table.length / pageSize)) } } });
     }
     if (url.pathname === '/i18n/events_manager/v2/api/pixel/create') {
       state.pixels.push({ create: body });
