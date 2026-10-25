@@ -23,6 +23,22 @@ export const manual = {
   interceptor: (tabId, enabled) => call('manual', 'interceptor', { tabId, enabled })
 };
 
+export const overview = {
+  scan: (tabId, { period = '7d', force = false } = {}) => call('overview', 'scan', { tabId, period, force }),
+  cached: () => call('overview', 'cached')
+};
+
+export const accounts = {
+  list: (tabId, force = false) => call('accounts', 'list', { tabId, force }),
+  cached: () => call('accounts', 'cached')
+};
+
+export const explorer = { load: (tabId, account, level, period) => call('explorer', 'load', { tabId, account, level, period }) };
+
+export const monitor = { status: () => call('monitor', 'status'), run: (tabId) => call('monitor', 'run', { tabId }) };
+
+export const context = { get: () => call('context', 'get') };
+
 export const appeals = {
   scan: (tabId) => call('appeals', 'scan', { tabId }),
   resolve: (tabId, account, rows) => call('appeals', 'resolve', { tabId, account, rows }),

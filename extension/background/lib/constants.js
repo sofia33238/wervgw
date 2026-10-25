@@ -36,3 +36,14 @@ export const PIXEL_EVENTS = Object.freeze([
   'AddToCart', 'InitiateCheckout', 'AddPaymentInfo', 'ViewContent', 'Contact',
   'Subscribe', 'PlaceAnOrder', 'Search', 'ClickButton', 'Download', 'FindLocation'
 ]);
+
+// Периоды статистики (даты считаются по часовому поясу браузера).
+export const PERIODS = Object.freeze([
+  { id: 'today', title: 'Сегодня', days: 1, offset: 0 },
+  { id: 'yesterday', title: 'Вчера', days: 1, offset: 1 },
+  { id: '7d', title: '7 дней', days: 7, offset: 0 },
+  { id: '30d', title: '30 дней', days: 30, offset: 0 }
+]);
+
+export const MONITOR_INTERVALS = Object.freeze([5, 10, 15, 30, 60]);
+export const META_COLORS = Object.freeze(['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple']);
