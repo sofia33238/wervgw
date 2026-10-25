@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "TTAds Hub",
+  "version": "1.0.0",
+  "minimum_chrome_version": "111",
+  "description": "Всё для TikTok Ads Manager в одном расширении: Manual-кампании, массовые апелляции, S2S-постбэки и пиксели.",
+  "permissions": ["storage", "tabs", "scripting", "webRequest"],
+  "host_permissions": [
+    "https://ads.tiktok.com/*",
+    "https://business-api.tiktok.com/*"
+  ],
+  "icons": {
+    "16": "assets/icon-16.png",
+    "32": "assets/icon-32.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  },
+  "action": {
+    "default_title": "TTAds Hub",
+    "default_popup": "ui/app.html",
+    "default_icon": {
+      "16": "assets/icon-16.png",
+      "32": "assets/icon-32.png",
+      "48": "assets/icon-48.png",
+      "128": "assets/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://ads.tiktok.com/*"],
+      "js": ["content/interceptor.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://ads.tiktok.com/*"],
+      "js": ["content/agent.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
