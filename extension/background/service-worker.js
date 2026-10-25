@@ -4,12 +4,21 @@ import { clearJournal, getSettings, log, patchSettings, readJournal, saveSetting
 import { VERSION } from './lib/constants.js';
 import * as manual from './manual/engine.js';
 import * as appeals from './appeals/engine.js';
+import * as overview from './overview/engine.js';
+import * as accounts from './accounts/engine.js';
+import * as explorer from './explorer/engine.js';
+import * as monitor from './monitor/engine.js';
+import { registerOmnibox, suggestFor, enter as omniboxEnter, currentContext } from './links/omnibox.js';
+import { registerContextTracking, getLastContext } from './links/context.js';
 import { sendTestEvent } from './s2s/events.js';
 import { createPixelInPage } from './s2s/pixel.js';
 import { runInPage } from './lib/page.js';
 
 // Слушатели регистрируются синхронно при загрузке воркера (требование MV3).
 manual.registerManualListeners();
+registerContextTracking();
+registerOmnibox();
+monitor.registerMonitor();
 
 chrome.runtime.onInstalled.addListener((details) => {
   log('info', 'sys', details.reason === 'install' ? `Установлен TTAds Hub ${VERSION}` : `TTAds Hub обновлён до ${VERSION}`);
@@ -27,6 +36,14 @@ async function agentCall(tabId, message) {
 }
 
 const handlers = {
+  'accounts.list': ({ tabId, force }) => accounts.list(tabId, { force: Boolean(force) }),
+  'accounts.cached': () => accounts.cached(),
+  'context.get': () => getLastContext(),
+  'overview.scan': ({ tabId, period, force }) => overview.scan(tabId, { period: typeof period === 'string' ? period : '7d', force: Boolean(force) }),
+  'overview.cached': () => overview.cached(),
+  'explorer.load': ({ tabId, account, level, period }) => explorer.load(tabId, { account, level, period }),
+  'monitor.status': async () => ({ state: await monitor.getState(), alarm: (await chrome.alarms?.get(monitor.ALARM)) ?? null }),
+  'monitor.run': ({ tabId }) => monitor.tick({ reason: 'manual', tabId }),
   'manual.status': async ({ tabId }) => {
     const tab = await chrome.tabs.get(tabId).catch(() => null);
     const info = parseAdsUrl(tab?.url ?? '');
@@ -81,9 +98,12 @@ const handlers = {
   'journal.get': () => readJournal(),
   'journal.clear': async () => { await clearJournal(); return { ok: true }; },
   'settings.get': () => getSettings(),
-  'settings.save': ({ settings }) => saveSettings(settings),
-  'settings.patch': ({ patch }) => patchSettings(patch)
+  'settings.save': async ({ settings }) => { const saved = await saveSettings(settings); await monitor.applyAlarm(saved); return saved; },
+  'settings.patch': async ({ patch }) => { const saved = await patchSettings(patch); if (patch?.monitor) await monitor.applyAlarm(saved); return saved; }
 };
+
+// Хуки для автотестов: позволяют проверить omnibox и мониторинг без реального ввода в адресную строку и ожидания таймера.
+globalThis.__tth = { omnibox: { suggestFor, enter: omniboxEnter, currentContext }, monitor, accounts, overview };
 
 // Токен-бакет: не больше ~1 записи MNL в секунду (всплеск до 60), чтобы страница не вытеснила журнал.
 const mnlBucket = { tokens: 60, at: Date.now() };

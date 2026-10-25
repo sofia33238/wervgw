@@ -36,3 +36,36 @@ test('normalizeSettings clamps values and drops unsafe data', () => {
   assert.equal('evil' in s, false);
   assert.equal(normalizeSettings({ appeals: { templateId: 'a', templates: [{ id: 'a', name: 'A', text: 't' }] } }).appeals.templateId, 'a');
 });
+
+test('normalizeSettings: links, monitor, overview and account meta sections', () => {
+  const d = normalizeSettings({});
+  assert.deepEqual(d.monitor, { enabled: false, intervalMin: 15, notify: false });
+  assert.deepEqual(d.overview, { period: '7d', sort: 'problems', filter: 'all' });
+  assert.deepEqual(d.accounts, { meta: {} });
+  assert.equal(d.links.openIn, 'new');
+  assert.ok(d.links.favorites.includes('billing'));
+
+  const s = normalizeSettings({
+    monitor: { enabled: true, intervalMin: 17, notify: true },
+    overview: { period: 'forever', sort: 'spend', filter: 'issues' },
+    links: { openIn: 'current', custom: [{ id: 'c_a', title: 'T', url: 'https://a.com' }] },
+    accounts: { meta: {
+      '7412345678901234567': { label: '  Прогрев-очень-длинная-метка-на-много-символов ', color: 'purple', note: 'x'.repeat(500), pinned: true },
+      '7412345678901234568': { label: '', note: '', pinned: false },
+      'abc': { label: 'bad id' },
+      '7412345678901234569': { label: 'ok', color: 'neon' }
+    } }
+  });
+  assert.deepEqual(s.monitor, { enabled: true, intervalMin: 15, notify: true });
+  assert.deepEqual(s.overview, { period: '7d', sort: 'spend', filter: 'issues' });
+  assert.equal(s.links.openIn, 'current');
+  assert.equal(s.links.custom.length, 1);
+  assert.deepEqual(Object.keys(s.accounts.meta), ['7412345678901234567', '7412345678901234569']);
+  const meta = s.accounts.meta['7412345678901234567'];
+  assert.equal(meta.label.length, 24);
+  assert.equal(meta.note.length, 300);
+  assert.equal(meta.color, 'purple');
+  assert.equal(s.accounts.meta['7412345678901234569'].color, 'gray');
+  assert.equal(normalizeSettings({ monitor: { intervalMin: 1000 } }).monitor.intervalMin, 60);
+  assert.equal(normalizeSettings({ monitor: { intervalMin: 1 } }).monitor.intervalMin, 5);
+});
